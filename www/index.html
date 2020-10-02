@@ -1,0 +1,847 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src * data: gap: https://ssl.gstatic.com; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'">
+  <script src="components/loader.js"></script>
+  <script src="lib/onsenui/js/onsenui.min.js"></script>
+  <script type="text/javascript" src="js/jquery.min.js"></script>
+  <script type="text/javascript" src="js/jquery-qrcode-0.14.0.min.js"></script>
+  <link rel="stylesheet" href="components/loader.css">
+  <link rel="stylesheet" href="lib/onsenui/css/onsenui.css">
+  <link rel="stylesheet" href="lib/onsenui/css/onsen-css-components.css">
+  <link rel="stylesheet" href="css/style.css">
+
+  <script>
+  var isFistTime;
+  var jsondbtxn;
+  var jsondbacc;
+  var isCloudSync;
+  var txns=[];
+  var accs=[];
+  //window.localStorage.clear();
+    ons.ready(function() {
+      console.log("Onsen UI is ready!");
+      if(window.localStorage.getItem('init')==null){
+          window.localStorage.setItem('init',-1);
+          isFirstTime=true;
+          navigator.notification.confirm("Click on learn more to know about the app and how to use it. Thanks!!!", 
+          function(index){
+              if(index==1){
+                loadFAQ();
+               
+              }
+          }, "Welcome to CamPay", ["Learn more","OK"]);
+        
+        
+      }else{
+          isFirstTime=false;
+      }
+      initDB();
+    });
+    
+    function onErrorCreateFile(err){
+        console.log("Dbase Error:");
+        console.log(err);
+    }
+    
+    function onErrorLoadFs(err){
+        console.log("Dbase Error:");
+        console.log(err);
+    } 
+    
+    function initDB()
+    {
+       //init trans database
+       window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) {
+       console.log('file system open: ' + fs.name);
+       fs.root.getFile("txn.json", { create: true, exclusive: false }, function (fileEntry) {
+       console.log("fileEntry is file?" + fileEntry.isFile.toString());
+       jsondbtxn=fileEntry;
+            }, onErrorCreateFile);
+
+        }, onErrorLoadFs);
+       
+       //init acc database
+       window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, function (fs) {
+       console.log('file system open: ' + fs.name);
+       fs.root.getFile("acc.json", { create: true, exclusive: false }, function (fileEntry) {
+       console.log("fileEntry is file?" + fileEntry.isFile.toString());
+       jsondbacc=fileEntry;
+            }, onErrorCreateFile);
+
+        }, onErrorLoadFs);
+    }
+    
+    
+    document.addEventListener('show', function(event) {
+      var page = event.target;
+      var titleElement = document.querySelector('#toolbar-title');
+      
+      if (page.matches('#first-page')) {
+        titleElement.innerHTML = 'CamPay';
+        //load accts
+        jsondbacc.file(function (file) {
+        var reader = new FileReader();
+        reader.onloadend = function() {
+            //console.log("Successful file read: " + this.result);
+            //displayFileData(fileEntry.fullPath + ": " + this.result);
+            if((this.result=='')||(this.result.length==0)){
+                //
+                console.log('No records found');
+            }else{
+            accs = JSON.parse(this.result);
+            var x = document.getElementById("accounts");
+            
+            //x.innerHTML='';
+            //console.log(accs);
+            for(i = x.options.length - 1 ; i >= 0 ; i--)
+            {
+                x.remove(i);
+            }
+            var option = document.createElement("option");
+            option.text="Select...";
+            option.value="";
+            x.add(option);
+            accs.forEach(function(e){
+                console.log(e);
+                var option = document.createElement("option");
+                option.text = e.label;
+                option.value = e.acc_no;
+                x.add(option);
+            });
+            }
+        };
+        reader.readAsText(file);
+        }, onErrorReadFile);
+         
+      } else if (page.matches('#second-page')) {
+        titleElement.innerHTML = 'CamPay';
+        //
+      }else if (page.matches('#third-page')) {
+        titleElement.innerHTML = 'CamPay';
+        //
+        jsondbacc.file(function (file) {
+        var reader = new FileReader();
+        reader.onloadend = function() {
+            //console.log("Successful file read: " + this.result);
+            //displayFileData(fileEntry.fullPath + ": " + this.result);
+            if((this.result=='')||(this.result.length==0)){
+                document.getElementById('no_rec2').style.display='block';
+            }else{
+        accs = JSON.parse(this.result);
+        if(accs.length==0){
+            document.getElementById('no_rec2').style.display='block';
+        }else{
+        var accList = document.getElementById('accList');
+        accList.innerHTML='';
+        accs.forEach(function(accEntry){
+        //console.log(accEntry);
+        var node1=document.createElement('ons-list-item')
+        node1.setAttribute('id','id'+accEntry.index);
+        var node2=document.createElement('div');
+        node2.setAttribute('class','left');
+        node2.innerText = accEntry.label;
+        node2.innerText += ' ('+accEntry.acc_no+')';
+        node1.appendChild(node2);
+        var node3=document.createElement('div');
+        node3.setAttribute('class','right');
+        node3.setAttribute('onclick','delAcc('+accEntry.index+',"id'+accEntry.index+'")');
+        var node4 = document.createElement('ons-icon');
+        node4.setAttribute('icon','ion-close-circled');
+        node4.setAttribute('class','list-item__icon');
+        node3.appendChild(node4);
+        node1.appendChild(node3);
+        
+        accList.appendChild(node1);
+        });}
+            }
+            };
+        reader.readAsText(file);
+        }, onErrorReadFile);
+        
+
+      }
+      else if (page.matches('#zero-page')) {
+        titleElement.innerHTML = 'CamPay';
+        document.getElementById('pbar1').style.display='block';
+        document.getElementById('no_rec1').style.display='none';
+        document.getElementById('transList').style.display='none';
+        window.setTimeout(function(){
+        //load transactions
+        jsondbtxn.file(function (file) {
+        var reader = new FileReader();
+        reader.onloadend = function() {
+            //console.log("Successful file read: " + this.result);
+            //displayFileData(fileEntry.fullPath + ": " + this.result);
+            if((this.result==null)||(this.result.length==0)){
+                document.getElementById('no_rec1').style.display='block';
+                document.getElementById('transList').style.display='none';
+                document.getElementById('pbar1').style.display='none';
+            }else{
+            txns = JSON.parse(this.result);
+            var transList = document.getElementById('txnList');
+            transList.innerHTML='';
+            txns.forEach(function(txnEntry){
+                //console.log(txnEntry);
+                var node1 = document.createElement('ons-list-item');
+                var node2 = document.createElement('div');
+                node2.setAttribute('class','left');
+                if(txnEntry.type=1){
+                node2.setAttribute('style','color:green');
+                }else{
+                node2.setAttribute('style','color:red');
+                }
+                var node3 = document.createElement('ons-icon');
+                node3.setAttribute('class','list-item__icon');
+                if(txnEntry.type=0){
+                node3.setAttribute('icon','ion-arrow-left-c');
+                }
+                else{
+                node3.setAttribute('icon','ion-arrow-right-c');
+                }
+                node2.appendChild(node3);
+                node1.appendChild(node2);
+                var node4=document.createElement('div');
+                node4.setAttribute('class','center');
+                var node5 = document.createElement('span');
+                if(txnEntry.type=1){
+                node5.innerText=' Receive';
+                }else{
+                node5.innerText=' Sent';
+                }
+                node4.appendChild(node5);
+                var node6 = document.createElement('small');
+                node6.innerText='('+txnEntry.acc_no+')';
+                node4.appendChild(node6);
+                node1.appendChild(node4);
+                
+                var node7 = document.createElement('div');
+                node7.setAttribute('class','right');
+                node7.innerText='₦'+txnEntry.amount;
+                node1.appendChild(node7);
+                transList.appendChild(node1);
+            });
+            document.getElementById('transList').style.display='block';
+            document.getElementById('pbar1').style.display='none';
+            document.getElementById('no_rec1').style.display='none';
+            }
+        };
+        reader.readAsText(file);
+        }, onErrorReadFile);
+         },2000);
+      }
+    });
+    function onErrorReadFile()
+    {
+        console.log("Error reading file");
+    }
+    var _result;
+    function scanBarcode() {
+            window.plugins.barcodeScanner.scan( function(result) {
+                _result=result;
+                /*navigator.notification.alert(
+                        "We got a barcode",  // message
+                              
+                        function(){
+                            if(result.cancelled==false){
+                                var dialog = document.querySelector('#ons-alert-dialog2');
+                                dialog.show();
+                            }
+                           //show select bank
+                           },      // callback
+                        'We got a barcode', // title
+                        'OK'                  // buttonName
+                    );
+                    */
+                    if(result.cancelled==false){
+                                var dialog = document.querySelector('#ons-alert-dialog2');
+                                dialog.show();
+                            }
+                }, function(error) {
+                    navigator.notification.alert(
+                        'Scanning error occured',  // message
+                        null,         // callback
+                        'QR Code Error',// title
+                        'OK'                  // buttonName
+                    );
+                }
+            );
+
+        }
+        function loadFAQ()
+        {
+            cordova.InAppBrowser.open('faq.html', 'blank', 'location=yes,hardwareback=yes');
+                      
+        }
+        function genQR()
+        {
+            var acc = document.getElementById('accounts').value;
+            var amt = document.getElementById('amt1').value;
+            //alert(acc+'/'+amt);
+            if(isNaN(amt) || (amt=='')){
+                 navigator.notification.alert(
+                        'Invalid amount. Please check if supplied amount only contains numeric characters',  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+            }else{
+                if(acc!=null && acc!=''){
+                   document.getElementById("qrcode").innerHTML='';
+                  /* var qrcode = new QRCode(document.getElementById("qrcode"), {
+                   width : 250,
+                    height : 250
+                  });
+                  qrcode.makeCode(acc+"*"+amt+"#");
+                  */
+                  $('#qrcode').qrcode({render: 'div', 
+                  minVersion: 1,
+                  maxVersion: 40, 
+                  ecLevel: 'H',
+                  size: 250,
+                  fill: '#000',
+                  background: '#faebd7',
+                  text: acc+","+amt+"",
+                  radius: 0,
+                  quiet: 0,
+                  mode: 0,
+                  mSize: 0.1,
+                  mPosX: 0.5,
+                  mPosY: 0.5,
+                  label: 'no label',
+                  fontname: 'sans',
+                  fontcolor: '#000',
+                  image: null
+                  });
+                  var modal = document.querySelector('ons-modal');
+                  modal.show();
+  
+                }else{
+                    navigator.notification.alert(
+                        'Account is empty. Go to settings and add a bank account number',  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+                }
+            }
+            
+        }
+        function hideDialog1()
+        {
+             var amt = document.getElementById('amt1').value;
+             var acc = document.getElementById('accounts').value;
+             document.getElementById('amt1').value='';
+             //add as new transaction of type=1
+             var index=Math.floor(Math.random()*1000);
+             txns.push({"amount":amt,"acc_no":acc,"index":index,"type":1});
+             console.log(txns);
+             jsondbtxn.createWriter(function (fileWriter) {
+             //fileWriter.truncate(0);
+             fileWriter.onwriteend = function() {
+                console.log("Successful file write...");
+                navigator.notification.alert(
+                        "Txn Entry Added!!!",  // message
+                        null,         // callback
+                        'Success',// title
+                        'OK'                  // buttonName
+                    );
+                    
+             var modal = document.querySelector('ons-modal');
+             modal.hide();
+            };
+    
+            fileWriter.onerror = function (e) {
+                console.log("Failed file write: " + e.toString());
+                navigator.notification.alert(
+                        "Txn Entry Failed: " + e.toString(),  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+                    
+             var modal = document.querySelector('ons-modal');
+             modal.hide();
+            };
+    
+              // If data object is not passed in,
+              // create a new Blob instead.
+             fileWriter.write(JSON.stringify(txns));
+             });
+        }
+        function hideDialog1x()
+        {
+            navigator.notification.alert(
+                        "Txn cancelled",  // message
+                        function(){
+                            var modal = document.querySelector('ons-modal');
+                            modal.hide();
+                        },         // callback
+                        'Success',// title
+                        'OK'                  // buttonName
+                    );
+        }
+        function showDialog2()
+        {
+            var dialog = document.querySelector('#ons-alert-dialog1');
+            dialog.show();
+        }
+        function hideDialog2()
+        {
+            var dialog = document.querySelector('#ons-alert-dialog1');
+            dialog.hide();
+        }
+        function hideDialog3()
+        {
+            var dialog = document.querySelector('#ons-alert-dialog2');
+            dialog.hide();
+        }
+        
+        function addAcc(){
+            var lbl=document.getElementById('label_2').value;
+            var acc_no=document.getElementById('acc_no_2').value;
+            //alert(lbl+'/'+acc_no);
+            if((lbl=='')||(acc_no=='')){
+                navigator.notification.alert(
+                        'All fields are required',  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+            }else{
+                if(isNaN(acc_no)){
+                    navigator.notification.alert(
+                        'Account no must be all numeric',  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+                }else{
+               // alert('');
+               
+            var index=Math.floor(Math.random()*1000);
+            var dataObj = {"label":lbl,"acc_no":acc_no,"index":index};
+            //console.log(dataObj);
+            accs.push(dataObj);
+            //console.log(accs);
+            document.getElementById('label_2').value='';
+            document.getElementById('acc_no_2').value='';
+            jsondbacc.createWriter(function (fileWriter) {
+            //fileWriter.truncate(0);
+            fileWriter.onwriteend = function() {
+                console.log("Successful file write...");
+                navigator.notification.alert(
+                        "Entry added!!!",  // message
+                        function(){
+                            //window.location.reload();
+                            var accList = document.getElementById('accList');
+                            var node1=document.createElement('ons-list-item')
+                            node1.setAttribute('id','id'+index);
+                            var node2=document.createElement('div');
+                            node2.setAttribute('class','left');
+                            node2.innerText = lbl;
+                            node2.innerText += ' ('+acc_no+')';
+                            node1.appendChild(node2);
+                            var node3=document.createElement('div');
+                            node3.setAttribute('class','right');
+                            node3.setAttribute('onclick','delAcc('+index+',"id'+index+'")');
+                            var node4 = document.createElement('ons-icon');
+                            node4.setAttribute('icon','ion-close-circled');
+                            node4.setAttribute('class','list-item__icon');
+                            node3.appendChild(node4);
+                            node1.appendChild(node3);
+                            accList.appendChild(node1);
+                            document.getElementById('no_rec2').style.display='none';
+                        },         // callback
+                        'Success',// title
+                        'OK'                  // buttonName
+                    );
+                hideDialog2();
+            };
+    
+            fileWriter.onerror = function (e) {
+                console.log("Failed file write: " + e.toString());
+                navigator.notification.alert(
+                        "Failed: " + e.toString(),  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+                hideDialog2();
+            };
+    
+              // If data object is not passed in,
+              // create a new Blob instead.
+              
+             fileWriter.write(JSON.stringify(accs));
+             });}
+            }
+        }
+      
+      function delAcc(_index,elemID){
+            //alert(_index+'/'+elemID);
+            accs.forEach(function(accEntry,index){
+                //alert(accEntry.index);
+                if(accEntry.index==_index){
+                    accs.splice(index,1);
+                  //  alert('Found');
+                }
+            });
+            //console.log(accs);
+            //update database
+            jsondbacc.createWriter(function (fileWriter) {
+            //fileWriter.truncate(0);
+            fileWriter.onwriteend = function() {
+                console.log("Successful file write...");
+               
+                //remove DOM
+                var accList = document.getElementById('accList');
+                var elem = document.getElementById(elemID);
+                elem.parentNode.removeChild(elem);
+                navigator.notification.alert(
+                        "Accounts updated!!!",  // message
+                        function(){
+                           // window.location.reload();
+                        },         // callback
+                        'Success',// title
+                        'OK'                  // buttonName
+                );
+                if(accs.length==0){
+                  document.getElementById('no_rec2').style.display='block';
+                }
+            };
+    
+            fileWriter.onerror = function (e) {
+                console.log("Failed file write: " + e.toString());
+                navigator.notification.alert(
+                        "Failed: " + e.toString(),  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+            };
+            
+            fileWriter.write(JSON.stringify(accs));
+        });
+    }
+    
+    function doPay()
+    { 
+        var bnk=parseInt(document.getElementById('bnk').value);
+        var scode='';
+        var _url;
+        var _acc =  _result.text.split(',')[0];
+        var _amt = _result.text.split(',')[1];
+        switch(bnk){
+            case 1:
+                //access to access
+                scode='*901*1*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break; 
+            case 2:
+                //access to access
+                scode='*901*2*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break; 
+            case 3:
+                //diamond
+                scode='*426*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break; 
+            case 4:
+                //fidelity
+                scode='*770*'; 
+                _url='tel:' + scode + _acc + '*' + _amt +'#';
+                break; 
+            case 5:
+                //firstbank
+                scode='*894*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break; 
+            case 6:
+                //heritage bank
+                scode='*322*030*'; 
+                _url='tel:' + scode + _acc + '*' + _amt +'#';
+                break;
+            case 7:
+                //keystone bank
+                scode='*533*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break;
+            case 8:
+                //GT bank to GT bank
+                scode='*737*1*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break;
+            case 9:
+                //GT bank to others
+                scode='*737*2*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break;
+            case 10:
+                //Sterling to sterling
+                scode='*822*4*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break;
+            case 11:
+                //Sterling to sterling
+                scode='*822*5*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break;
+            case 12:
+                //Wema
+                scode='*945*'; 
+                _url='tel:' + scode + _acc + '*' + _amt +'#';
+                break;
+            case 13:
+                //zenith
+                scode='*966*'; 
+                _url='tel:' + scode + _amt + '*' + _acc +'#';
+                break;    
+        }
+        //alert(scode);
+        //alert(_url);
+        window.plugins.CallNumber.callNumber(onSuccess, onError, _url, true);
+        /*window.plugins.webintent.startActivity({
+        action: window.plugins.webintent.ACTION_VIEW,
+        url: _url,
+        function() {alert('Yes');},
+        function() {alert('Failed to open URL via Android Intent')}
+        });*/
+        //dial code here
+    }
+    function onSuccess(result){
+     console.log("Success:"+result);
+     var dialog = document.querySelector('#ons-alert-dialog2');
+                                dialog.hide();
+   }
+ 
+    function onError(result) {
+     console.log("Error:"+result);
+     var dialog = document.querySelector('#ons-alert-dialog2');
+                                dialog.hide();
+    }
+    
+    function doMPay(){
+       var acc_no=document.getElementById('acc_no').value;
+       var amt2=document.getElementById('amt2').value;
+       if((acc_no=='')||(amt2=='')){
+           navigator.notification.alert("Bank Account or amount is empty",null,'Error','OK');
+       }else{
+           if(isNaN(amt2)){
+                navigator.notification.alert("Amount must be numeric value",null,'Error','OK');
+           }else{
+               _result = {text:acc_no+'*'+amt2+'#'};
+               var dialog = document.querySelector('#ons-alert-dialog2');
+               dialog.show();
+           }
+         }
+       }
+    
+    function clearTrans()
+    {
+        navigator.notification.confirm("Are you sure you wish to clear transaction log?", 
+          function(index){
+              if(index==1){
+            jsondbtxn.createWriter(function (fileWriter) {
+            //fileWriter.truncate(0);
+            fileWriter.onwriteend = function() {
+                console.log("Successful file write...");
+                navigator.notification.alert(
+                        "Entries cleared!!!",  // message
+                        null,         // callback
+                        'Success',// title
+                        'OK'                  // buttonName
+                    );
+                    document.getElementById('txnList').innerHTML = '';
+                    document.getElementById('no_rec1').style.display='block';
+                    document.getElementById('transList').style.display='none';
+                    document.getElementById('pbar1').style.display='none';
+            };
+    
+            fileWriter.onerror = function (e) {
+                console.log("Failed file write: " + e.toString());
+                navigator.notification.alert(
+                        "Failed: " + e.toString(),  // message
+                        null,         // callback
+                        'Error',// title
+                        'OK'                  // buttonName
+                    );
+            };
+    
+              // If data object is not passed in,
+              // create a new Blob instead.
+              
+             fileWriter.write("");
+             });
+              }
+          }, "Welcome to CamPay", ["Yes","No"]);
+    }
+  </script>
+  <style>
+      ons-select,ons-input,ons-button
+      {
+          width:100%;
+          
+          
+      }
+      ons-select{
+          padding: 0.5em !important;
+          border: solid 1px gainsboro !important;
+          box-sizing: border-box;
+      }
+  </style>
+</head>
+<body>
+  <ons-page>
+    <ons-toolbar style="
+    background-color: #009688;
+    color: white !important;
+">
+      <div class="center" id="toolbar-title" style="
+    color: white !important;
+"></div>
+      <div class="right">
+      <ons-toolbar-button>
+      </ons-toolbar-button>
+    </div>
+    </ons-toolbar>
+    <ons-tabbar position="auto">
+    <ons-tab label="Transactions" page="tab0.html"  icon="ion-arrow-swap" active>
+      </ons-tab>
+      <ons-tab label="Receive" page="tab1.html"  icon="ion-arrow-down-c" >
+      </ons-tab>
+      <ons-tab label="Send" page="tab2.html" icon="ion-arrow-up-c">
+      </ons-tab>
+      <ons-tab label="Settings" page="tab3.html" icon="ion-gear-b">
+      </ons-tab>
+    </ons-tabbar>
+  </ons-page>
+
+<ons-template id="tab0.html">
+    <ons-page id="zero-page" >
+     <div id="transList" style="display:none">
+     <div>
+         <div class="right">
+         </div>
+     </div>
+         <ons-list id="txnList">
+            
+        </ons-list>
+         <ons-button onclick="clearTrans();" style="text-align:center">Clear Transactions</ons-button></div>
+        <h4 style="display:none;text-align:center" id="no_rec1"><i>No records found</i></h4>
+        <div id="pbar1" style="text-align:center"><ons-progress-circular  indeterminate></ons-progress-circular></div>
+    </ons-page>
+  </ons-template>
+  
+  <ons-template id="tab1.html">
+    <ons-page id="first-page">
+    <ons-card>
+   
+      <h5><b>Bank Account No.</b></h5>
+       <ons-select id="accounts" style="padding: 1em;
+    border: solid 1px gainsboro;">
+       <option value="">Select...</option>
+      </ons-select>
+      <h5><b>Amount</b></h5>
+       <p><ons-input id="amt1" type="text" modifier="underbar" ></ons-input>
+      </p>
+      <p>
+      <ons-button onclick="genQR()" style="text-align:center" >OK</ons-button></p>
+      </ons-card>
+    </ons-page>
+  </ons-template>
+
+  <ons-template id="tab2.html">
+    <ons-page id="second-page">
+     <ons-card>
+      <p style="text-align: center;" onclick="scanBarcode()">
+        <i class="ion-qr-scanner" style="font-size:45px" ></i><br/>
+        <i>Scan qr Code</i>
+      </p>
+      <p style="text-align: center;">Or</p>
+      <h5><b>Account No.</b></h5>
+       <p><ons-input id="acc_no" type="number" modifier="underbar" ></ons-input>
+      </p>
+      <h5><b>Amount</b></h5>
+       <p><ons-input id="amt2" type="number" modifier="underbar" ></ons-input>
+      </p>
+      <p>
+      <ons-button onclick="doMPay()" style="text-align:center">OK</ons-button></p>
+      </ons-card>
+    </ons-page>
+  </ons-template>
+  
+  <ons-template id="tab3.html">
+    <ons-page id="third-page">
+      <ons-card>
+     <!-- <p style="text-align: right;" >
+        <ons-icon icon="ion-cloud" class="list-item__icon"><small style="font-size:8px">Sync Cloud</small></ons-icon>
+      </p>
+      <p style="text-align: right;" >
+        <ons-icon icon="ion-android-cloud-done" class="list-item__icon"><small style="font-size:8px">Synced With Cloud</small></ons-icon>
+      </p>-->
+      <h5>My Accounts</h5>
+       <ons-list id="accList">
+           
+        </ons-list>
+       <!-- <h4 style="text-align:center" id="no_rec2"><i>No records found</i></h4><br/><br/>-->
+        <ons-button onclick="showDialog2()" style="text-align:center">Add Account</ons-button>
+        <br/><br/>
+        <center><ons-button modifier="quiet" modifier="large" onclick="loadFAQ()">Learn About CamPay</ons-button>
+        </center></ons-card>
+    </ons-page>
+  </ons-template>
+  
+  <ons-modal direction="up">
+  <div style="text-align: center; padding:1em">
+    <div id="qrcode" style="padding:1em; box-sizing:border-box"
+    ></div>
+    <br/>
+    <ons-button onclick="hideDialog1()">OK</ons-button><br/><br/>
+    <ons-button onclick="hideDialog1x()">Cancel</ons-button>
+  </div>
+</ons-modal>
+
+<ons-alert-dialog id="ons-alert-dialog1">
+  <div class="alert-dialog-title">Add Account</div>
+  <div class="alert-dialog-content">
+    <ons-input id="label_2" type="text" modifier="underbar" placeholder="Label" ></ons-input><br/><br/>
+    <ons-input id="acc_no_2" type="text" modifier="underbar" placeholder="Account No." ></ons-input><br/></br/>
+  </div>
+  <div class="alert-dialog-footer">
+  
+    <ons-button class="alert-dialog-button" onclick="addAcc()">OK</ons-button>
+    <ons-button class="alert-dialog-button" onclick="hideDialog2()">Cancel</ons-button>
+  </div>
+</ons-alert-dialog>
+
+<ons-alert-dialog id="ons-alert-dialog2">
+  <div class="alert-dialog-title">Choose Bank You Wish To Make Transfer From</div>
+  <div class="alert-dialog-content">
+    <ons-select id="bnk">
+        <option value="1">Access Bank (Access)</option>
+        <option value="2">Access Bank (Others)</option>
+        <option value="3">Diamond Bank</option>
+        <option value="4">Fidelity</option>
+        <option value="5">FirstBank</option>
+        <option value="6">Heritage Bank</option>
+        <option value="7">Keystone Bank</option>
+        <option value="8">GTBank (GTBank)</option>
+        <option value="9">GTBank (Others)</option>
+        <option value="10">Sterling (Sterling)</option>
+        <option value="11">Sterling (Others)</option>
+        <option value="12">Wema</option>
+        <option value="13">Zenith</option>
+    </ons-select><br/><br/>
+  </div>
+  <div class="alert-dialog-footer">
+  
+    <ons-button class="alert-dialog-button" onclick="doPay()">OK</ons-button>
+    <ons-button class="alert-dialog-button" onclick="hideDialog3()">Cancel</ons-button>
+  </div>
+</ons-alert-dialog>
+</body>
+</html>
